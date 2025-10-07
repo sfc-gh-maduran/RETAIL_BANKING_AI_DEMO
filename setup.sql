@@ -1,0 +1,329 @@
+-- Create a clean sandbox
+USE DATABASE BANKING;
+CREATE OR REPLACE SCHEMA AUTO_LOANS_DEMO;
+
+USE DATABASE BANKING;
+USE SCHEMA AUTO_LOANS_DEMO;
+
+-- 1) Customers
+CREATE OR REPLACE TABLE CUSTOMERS (
+  CUSTOMER_ID         NUMBER        NOT NULL,
+  FIRST_NAME          STRING        NOT NULL,
+  LAST_NAME           STRING        NOT NULL,
+  EMAIL               STRING,
+  PHONE               STRING,
+  DOB                 DATE,
+  ADDRESS_LINE1       STRING,
+  CITY                STRING,
+  STATE               STRING,
+  POSTAL_CODE         STRING,
+  CREATED_AT          TIMESTAMP_NTZ DEFAULT CURRENT_TIMESTAMP(),
+  SEGMENT             STRING,                         -- e.g., Prime, Near-Prime, Subprime
+  PRIMARY KEY (CUSTOMER_ID)
+);
+
+-- 2) Customer Accounts (bank-level relationship)
+CREATE OR REPLACE TABLE CUSTOMER_ACCOUNTS (
+  ACCOUNT_ID          NUMBER        NOT NULL,
+  CUSTOMER_ID         NUMBER        NOT NULL,
+  ACCOUNT_OPEN_DATE   DATE          NOT NULL,
+  STATUS              STRING,                         -- Active, Closed, Suspended
+  BRANCH_ID           STRING,
+  PRIMARY KEY (ACCOUNT_ID)
+);
+
+-- 3) Loan Applications
+CREATE OR REPLACE TABLE LOAN_APPLICATIONS (
+  APPLICATION_ID      NUMBER        NOT NULL,
+  CUSTOMER_ID         NUMBER        NOT NULL,
+  SUBMITTED_AT        TIMESTAMP_NTZ NOT NULL,
+  CHANNEL             STRING,                         -- Branch, Online, Dealer
+  PRODUCT             STRING,                         -- New Auto, Used Auto, Refinance
+  AMOUNT_REQUESTED    NUMBER(12,2)  NOT NULL,
+  TERM_MONTHS         NUMBER        NOT NULL,
+  INTEREST_RATE_OFFERED NUMBER(5,3),
+  STATUS              STRING,                         -- Approved, Denied, Pending
+  DECISION_AT         TIMESTAMP_NTZ,
+  REASON_CODE         STRING,                         -- e.g., DTI, CreditScore, IncomeVerif
+  PRIMARY KEY (APPLICATION_ID)
+);
+
+-- 4) Loans (funded/active)
+CREATE OR REPLACE TABLE LOANS (
+  LOAN_ID             NUMBER        NOT NULL,
+  CUSTOMER_ID         NUMBER        NOT NULL,
+  APPLICATION_ID      NUMBER,
+  ACCOUNT_ID          NUMBER,
+  ORIGINATION_DATE    DATE          NOT NULL,
+  PRINCIPAL           NUMBER(12,2)  NOT NULL,
+  INTEREST_RATE       NUMBER(5,3)   NOT NULL,
+  TERM_MONTHS         NUMBER        NOT NULL,
+  MATURITY_DATE       DATE          NOT NULL,
+  LOAN_STATUS         STRING,                         -- Active, PaidOff, ChargedOff
+  PRIMARY KEY (LOAN_ID)
+);
+
+-- 5) Payments
+CREATE OR REPLACE TABLE PAYMENTS (
+  PAYMENT_ID          NUMBER        NOT NULL,
+  LOAN_ID             NUMBER        NOT NULL,
+  CUSTOMER_ID         NUMBER        NOT NULL,
+  PAYMENT_DATE        DATE          NOT NULL,
+  AMOUNT_DUE          NUMBER(12,2),
+  AMOUNT_PAID         NUMBER(12,2),
+  PRINCIPAL_COMPONENT NUMBER(12,2),
+  INTEREST_COMPONENT  NUMBER(12,2),
+  LATE_FEE            NUMBER(12,2),
+  PAST_DUE_DAYS       NUMBER,
+  PAYMENT_STATUS      STRING,                         -- OnTime, Late, Missed
+  PRIMARY KEY (PAYMENT_ID)
+);
+
+-- 6) Vehicles
+CREATE OR REPLACE TABLE VEHICLES (
+  VEHICLE_ID          NUMBER        NOT NULL,
+  LOAN_ID             NUMBER        NOT NULL,
+  VIN                 STRING        NOT NULL,
+  MAKE                STRING,
+  MODEL               STRING,
+  MODEL_YEAR          NUMBER,
+  MSRP                NUMBER(12,2),
+  PURCHASE_PRICE      NUMBER(12,2),
+  MILEAGE_AT_PURCHASE NUMBER,
+  DEALER_ID           STRING,
+  PRIMARY KEY (VEHICLE_ID)
+);
+
+
+
+-- Customers
+INSERT INTO CUSTOMERS (CUSTOMER_ID, FIRST_NAME, LAST_NAME, EMAIL, PHONE, DOB, ADDRESS_LINE1, CITY, STATE, POSTAL_CODE, SEGMENT, CREATED_AT) VALUES
+  (1001,'Ava','Johnson','ava.johnson@example.com','555-111-0001','1987-03-14','12 Oak St','Austin','TX','73301','Prime',CURRENT_TIMESTAMP()),
+  (1002,'Ben','Martinez','ben.martinez@example.com','555-111-0002','1991-07-22','99 Pine Ave','Phoenix','AZ','85001','Near-Prime',CURRENT_TIMESTAMP()),
+  (1003,'Cara','Lee','cara.lee@example.com','555-111-0003','1983-12-03','77 Maple Dr','Denver','CO','80014','Prime',CURRENT_TIMESTAMP()),
+  (1004,'Dev','Singh','dev.singh@example.com','555-111-0004','1996-05-18','450 Elm St','Columbus','OH','43004','Subprime',CURRENT_TIMESTAMP()),
+  (1005,'Ella','Nguyen','ella.nguyen@example.com','555-111-0005','1979-09-09','8 Birch Rd','Tampa','FL','33601','Prime',CURRENT_TIMESTAMP());
+
+-- Accounts
+INSERT INTO CUSTOMER_ACCOUNTS (ACCOUNT_ID, CUSTOMER_ID, ACCOUNT_OPEN_DATE, STATUS, BRANCH_ID) VALUES
+  (20001,1001,'2021-01-15','Active','BR001'),
+  (20002,1002,'2022-05-03','Active','BR002'),
+  (20003,1003,'2020-08-24','Active','BR003'),
+  (20004,1004,'2023-02-11','Active','BR004'),
+  (20005,1005,'2019-10-02','Active','BR005');
+
+-- Applications
+INSERT INTO LOAN_APPLICATIONS (APPLICATION_ID, CUSTOMER_ID, SUBMITTED_AT, CHANNEL, PRODUCT, AMOUNT_REQUESTED, TERM_MONTHS, INTEREST_RATE_OFFERED, STATUS, DECISION_AT, REASON_CODE) VALUES
+  (30001,1001,'2023-11-02 10:15','Dealer','New Auto',35000,72,4.250,'Approved','2023-11-02 15:30',NULL),
+  (30002,1002,'2024-01-18 09:05','Online','Used Auto',18000,60,7.750,'Approved','2024-01-18 14:10',NULL),
+  (30003,1003,'2024-03-05 13:20','Branch','Refinance',22000,48,5.490,'Approved','2024-03-05 16:05',NULL),
+  (30004,1004,'2024-04-22 11:40','Dealer','Used Auto',24000,72,12.990,'Denied','2024-04-22 17:50','CreditScore'),
+  (30005,1005,'2023-09-14 12:00','Online','New Auto',42000,72,4.990,'Approved','2023-09-14 16:45',NULL),
+  (30006,1002,'2024-06-09 08:55','Dealer','Refinance',15000,36,6.990,'Pending',NULL,NULL),
+  (30007,1004,'2024-07-12 10:30','Online','Used Auto',16000,60,11.490,'Approved','2024-07-12 15:00',NULL);
+
+-- Loans (only for approved applications)
+INSERT INTO LOANS (LOAN_ID, CUSTOMER_ID, APPLICATION_ID, ACCOUNT_ID, ORIGINATION_DATE, PRINCIPAL, INTEREST_RATE, TERM_MONTHS, MATURITY_DATE, LOAN_STATUS) VALUES
+  (40001,1001,30001,20001,'2023-11-10',35000,4.250,72,'2029-11-10','Active'),
+  (40002,1002,30002,20002,'2024-01-25',18000,7.750,60,'2029-01-25','Active'),
+  (40003,1003,30003,20003,'2024-03-12',22000,5.490,48,'2028-03-12','Active'),
+  (40004,1005,30005,20005,'2023-09-20',42000,4.990,72,'2029-09-20','Active'),
+  (40005,1004,30007,20004,'2024-07-20',16000,11.490,60,'2029-07-20','Active');
+
+-- Vehicles
+INSERT INTO VEHICLES (VEHICLE_ID, LOAN_ID, VIN, MAKE, MODEL, MODEL_YEAR, MSRP, PURCHASE_PRICE, MILEAGE_AT_PURCHASE, DEALER_ID) VALUES
+  (50001,40001,'1FTFW1EF1EFA12345','Ford','F-150',2023,54000,38000,12,'DLR-TX-001'),
+  (50002,40002,'2C4RC1BG0ERB67890','Toyota','Camry',2021,30000,18500,24000,'DLR-AZ-014'),
+  (50003,40003,'3FA6P0H72FRG45678','Honda','Civic',2020,25000,21000,19000,'DLR-CO-207'),
+  (50004,40004,'5N1AT2MV7EC987654','Tesla','Model 3',2023,42000,41500,5,'DLR-FL-300'),
+  (50005,40005,'1HGBH41JXMN109186','Hyundai','Elantra',2022,21000,16200,8000,'DLR-OH-120');
+
+-- Payments (a few months of activity; include on-time and late)
+INSERT INTO PAYMENTS (PAYMENT_ID, LOAN_ID, CUSTOMER_ID, PAYMENT_DATE, AMOUNT_DUE, AMOUNT_PAID, PRINCIPAL_COMPONENT, INTEREST_COMPONENT, LATE_FEE, PAST_DUE_DAYS, PAYMENT_STATUS) VALUES
+  (60001,40001,1001,'2023-12-15',550.00,550.00,420.00,130.00,0.00,0,'OnTime'),
+  (60002,40001,1001,'2024-01-15',550.00,550.00,422.00,128.00,0.00,0,'OnTime'),
+  (60003,40001,1001,'2024-02-16',550.00,560.00,425.00,125.00,10.00,1,'Late'),
+
+  (60004,40002,1002,'2024-02-25',400.00,400.00,310.00,90.00,0.00,0,'OnTime'),
+  (60005,40002,1002,'2024-03-25',400.00,380.00,290.00,90.00,0.00,5,'Late'),
+  (60006,40002,1002,'2024-04-25',400.00,0.00,0.00,0.00,0.00,35,'Missed'),
+
+  (60007,40003,1003,'2024-04-12',520.00,520.00,400.00,120.00,0.00,0,'OnTime'),
+  (60008,40003,1003,'2024-05-12',520.00,520.00,402.00,118.00,0.00,0,'OnTime'),
+
+  (60009,40004,1005,'2023-10-20',600.00,600.00,470.00,130.00,0.00,0,'OnTime'),
+  (60010,40004,1005,'2023-11-20',600.00,600.00,472.00,128.00,0.00,0,'OnTime'),
+  (60011,40004,1005,'2023-12-20',600.00,600.00,474.00,126.00,0.00,0,'OnTime'),
+
+  (60012,40005,1004,'2024-08-20',360.00,360.00,270.00,90.00,0.00,0,'OnTime'),
+  (60013,40005,1004,'2024-09-20',360.00,320.00,230.00,90.00,0.00,7,'Late');
+
+
+select * from banking.auto_loans_demo.customer_accounts;
+
+
+
+USE DATABASE BANKING;
+
+CREATE OR REPLACE SCHEMA CREDIT;
+USE SCHEMA CREDIT;
+
+drop table CREDIT_CARD_APPLICATIONS;
+drop table CREDIT_CARDS;
+drop table MERCHANTS;
+drop table CARD_TRANSACTIONS;
+drop table CARD_STATEMENTS;
+drop table CARD_PAYMENTS;
+
+-- 1) Credit Card Applications
+CREATE OR REPLACE TABLE CREDIT_CARD_APPLICATIONS (
+  CC_APPLICATION_ID       NUMBER        NOT NULL,
+  CUSTOMER_ID             NUMBER        NOT NULL,
+  SUBMITTED_AT            TIMESTAMP_NTZ NOT NULL,
+  CHANNEL                 STRING,                         -- Branch, Online, Partner
+  CARD_PRODUCT            STRING,                         -- CashBack, Travel, Platinum
+  CREDIT_LIMIT_REQUESTED  NUMBER(12,2),
+  APR_OFFERED             NUMBER(5,3),
+  STATUS                  STRING,                         -- Approved, Denied, Pending
+  DECISION_AT             TIMESTAMP_NTZ,
+  REASON_CODE             STRING,                         -- e.g., CreditScore, DTI
+  PRIMARY KEY (CC_APPLICATION_ID)
+);
+
+-- 2) Credit Cards (approved/active)
+CREATE OR REPLACE TABLE CREDIT_CARDS (
+  CARD_ID                 NUMBER        NOT NULL,
+  CUSTOMER_ID             NUMBER        NOT NULL,
+  ACCOUNT_ID              NUMBER,                         -- references CORE.CUSTOMER_ACCOUNTS
+  APPLICATION_ID          NUMBER,                         -- references CREDIT_CARD_APPLICATIONS
+  CARD_NUMBER_TOKEN       STRING        NOT NULL,         -- tokenized, not real PAN
+  CARD_PRODUCT            STRING,
+  OPEN_DATE               DATE          NOT NULL,
+  STATUS                  STRING,                         -- Active, Closed, Suspended
+  CREDIT_LIMIT            NUMBER(12,2)  NOT NULL,
+  CURRENT_BALANCE         NUMBER(12,2)  DEFAULT 0,
+  APR                     NUMBER(5,3)   NOT NULL,
+  PRIMARY KEY (CARD_ID)
+);
+
+-- 3) Merchants
+CREATE OR REPLACE TABLE MERCHANTS (
+  MERCHANT_ID             NUMBER        NOT NULL,
+  MERCHANT_NAME           STRING        NOT NULL,
+  MCC                     STRING,                         -- Merchant Category Code
+  CITY                    STRING,
+  STATE                   STRING,
+  COUNTRY                 STRING,
+  PRIMARY KEY (MERCHANT_ID)
+);
+
+-- 4) Card Transactions
+CREATE OR REPLACE TABLE CARD_TRANSACTIONS (
+  TRANSACTION_ID          NUMBER        NOT NULL,
+  CARD_ID                 NUMBER        NOT NULL,
+  CUSTOMER_ID             NUMBER        NOT NULL,
+  MERCHANT_ID             NUMBER,
+  AUTH_TIMESTAMP          TIMESTAMP_NTZ NOT NULL,
+  POST_DATE               DATE,
+  AMOUNT                  NUMBER(12,2)  NOT NULL,
+  CURRENCY                STRING        DEFAULT 'USD',
+  CATEGORY                STRING,                         -- Grocery, Fuel, Travel, Dining, Electronics, etc.
+  CHANNEL                 STRING,                         -- POS, ECOM, Contactless
+  STATUS                  STRING,                         -- Authorized, Posted, Reversed, Disputed
+  PRIMARY KEY (TRANSACTION_ID)
+);
+
+-- 5) Card Statements
+CREATE OR REPLACE TABLE CARD_STATEMENTS (
+  STATEMENT_ID            NUMBER        NOT NULL,
+  CARD_ID                 NUMBER        NOT NULL,
+  STATEMENT_PERIOD_START  DATE          NOT NULL,
+  STATEMENT_PERIOD_END    DATE          NOT NULL,
+  DUE_DATE                DATE          NOT NULL,
+  STATEMENT_BALANCE       NUMBER(12,2)  NOT NULL,
+  MIN_PAYMENT_DUE         NUMBER(12,2)  NOT NULL,
+  PRIMARY KEY (STATEMENT_ID)
+);
+
+-- 6) Card Payments
+CREATE OR REPLACE TABLE CARD_PAYMENTS (
+  CARD_PAYMENT_ID         NUMBER        NOT NULL,
+  CARD_ID                 NUMBER        NOT NULL,
+  CUSTOMER_ID             NUMBER        NOT NULL,
+  STATEMENT_ID            NUMBER,                         -- optional: payment applied to statement
+  PAYMENT_DATE            DATE          NOT NULL,
+  AMOUNT                  NUMBER(12,2)  NOT NULL,
+  METHOD                  STRING,                         -- ACH, Debit, Check
+  STATUS                  STRING,                         -- Received, Returned
+  PRIMARY KEY (CARD_PAYMENT_ID)
+);
+
+
+USE DATABASE AUTO_LOANS_DEMO;
+USE SCHEMA CREDIT;
+
+-- Applications (reuses customer_ids 1001..1005 from CORE.CUSTOMERS)
+INSERT INTO CREDIT_CARD_APPLICATIONS (CC_APPLICATION_ID, CUSTOMER_ID, SUBMITTED_AT, CHANNEL, CARD_PRODUCT, CREDIT_LIMIT_REQUESTED, APR_OFFERED, STATUS, DECISION_AT, REASON_CODE) VALUES
+  (70001,1001,'2024-06-10 09:45','Online','CashBack',15000,18.990,'Approved','2024-06-10 14:30',NULL),
+  (70002,1002,'2024-07-02 11:20','Branch','Travel',12000,22.990,'Approved','2024-07-02 16:05',NULL),
+  (70003,1003,'2024-07-15 13:10','Online','Platinum',20000,16.990,'Denied','2024-07-15 17:25','CreditScore'),
+  (70004,1004,'2024-08-01 10:05','Partner','CashBack',8000,27.990,'Approved','2024-08-01 15:40',NULL),
+  (70005,1005,'2024-06-25 12:00','Online','Travel',25000,17.990,'Approved','2024-06-25 15:10',NULL);
+
+-- Cards (map approved apps to accounts from CORE.CUSTOMER_ACCOUNTS 20001..20005)
+INSERT INTO CREDIT_CARDS (CARD_ID, CUSTOMER_ID, ACCOUNT_ID, APPLICATION_ID, CARD_NUMBER_TOKEN, CARD_PRODUCT, OPEN_DATE, STATUS, CREDIT_LIMIT, CURRENT_BALANCE, APR) VALUES
+  (80001,1001,20001,70001,'4111-XXXX-XXXX-1234','CashBack','2024-06-15','Active',15000,1250.35,18.990),
+  (80002,1002,20002,70002,'4111-XXXX-XXXX-2345','Travel','2024-07-05','Active',12000,3420.00,22.990),
+  (80003,1004,20004,70004,'4111-XXXX-XXXX-3456','CashBack','2024-08-05','Active',8000,610.50,27.990),
+  (80004,1005,20005,70005,'4111-XXXX-XXXX-4567','Travel','2024-06-28','Active',25000,9875.20,17.990);
+
+-- Merchants
+INSERT INTO MERCHANTS (MERCHANT_ID, MERCHANT_NAME, MCC, CITY, STATE, COUNTRY) VALUES
+  (90001,'FreshMarket Grocery','5411','Austin','TX','US'),
+  (90002,'FuelFast Station','5541','Phoenix','AZ','US'),
+  (90003,'Skyways Airlines','4511','Denver','CO','US'),
+  (90004,'Bistro Bella','5812','Columbus','OH','US'),
+  (90005,'TechHub Electronics','5732','Tampa','FL','US'),
+  (90006,'Global Hotel Group','7011','Miami','FL','US');
+
+-- Transactions (mix of authorized, posted, reversed, disputed)
+INSERT INTO CARD_TRANSACTIONS (TRANSACTION_ID, CARD_ID, CUSTOMER_ID, MERCHANT_ID, AUTH_TIMESTAMP, POST_DATE, AMOUNT, CURRENCY, CATEGORY, CHANNEL, STATUS) VALUES
+  (91001,80001,1001,90001,'2024-08-05 18:10','2024-08-06',82.45,'USD','Grocery','POS','Posted'),
+  (91002,80001,1001,90004,'2024-08-10 19:30','2024-08-11',56.20,'USD','Dining','POS','Posted'),
+  (91003,80001,1001,90005,'2024-08-20 14:05','2024-08-21',399.99,'USD','Electronics','ECOM','Posted'),
+
+  (91004,80002,1002,90002,'2024-08-07 08:25','2024-08-07',65.30,'USD','Fuel','POS','Posted'),
+  (91005,80002,1002,90003,'2024-08-22 12:00','2024-08-23',780.00,'USD','Travel','ECOM','Posted'),
+  (91006,80002,1002,90006,'2024-08-25 21:10',NULL,450.00,'USD','Travel','ECOM','Authorized'),
+
+  (91007,80003,1004,90001,'2024-08-12 09:15','2024-08-13',34.18,'USD','Grocery','POS','Posted'),
+  (91008,80003,1004,90002,'2024-08-15 07:50','2024-08-15',42.60,'USD','Fuel','POS','Posted'),
+  (91009,80003,1004,90004,'2024-08-28 20:45','2024-08-29',88.00,'USD','Dining','POS','Reversed'),
+
+  (91010,80004,1005,90005,'2024-08-03 10:05','2024-08-04',1299.00,'USD','Electronics','ECOM','Posted'),
+  (91011,80004,1005,90006,'2024-08-18 22:10','2024-08-19',650.00,'USD','Travel','ECOM','Posted'),
+  (91012,80004,1005,90003,'2024-08-28 06:40','2024-08-29',420.00,'USD','Travel','ECOM','Disputed');
+
+-- Statements (Aug and Sep 2024 cycles)
+INSERT INTO CARD_STATEMENTS (STATEMENT_ID, CARD_ID, STATEMENT_PERIOD_START, STATEMENT_PERIOD_END, DUE_DATE, STATEMENT_BALANCE, MIN_PAYMENT_DUE) VALUES
+  (92001,80001,'2024-08-01','2024-08-31','2024-09-25',538.64,35.00),
+  (92002,80002,'2024-08-01','2024-08-31','2024-09-20',1245.30,40.00),
+  (92003,80003,'2024-08-01','2024-08-31','2024-09-22',164.78,30.00),
+  (92004,80004,'2024-08-01','2024-08-31','2024-09-18',2369.00,71.00),
+
+  (92005,80001,'2024-09-01','2024-09-30','2024-10-25',711.91,35.00),
+  (92006,80002,'2024-09-01','2024-09-30','2024-10-20',2310.00,69.00),
+  (92007,80003,'2024-09-01','2024-09-30','2024-10-22',205.38,30.00),
+  (92008,80004,'2024-09-01','2024-09-30','2024-10-18',3150.40,95.00);
+
+-- Payments (on-time and returned)
+INSERT INTO CARD_PAYMENTS (CARD_PAYMENT_ID, CARD_ID, CUSTOMER_ID, STATEMENT_ID, PAYMENT_DATE, AMOUNT, METHOD, STATUS) VALUES
+  (93001,80001,1001,92001,'2024-09-20',200.00,'ACH','Received'),
+  (93002,80002,1002,92002,'2024-09-18',50.00,'Debit','Returned'),
+  (93003,80003,1004,92003,'2024-09-21',40.00,'ACH','Received'),
+  (93004,80004,1005,92004,'2024-09-16',100.00,'ACH','Received'),
+
+  (93005,80001,1001,92005,'2024-10-22',100.00,'ACH','Received'),
+  (93006,80002,1002,92006,'2024-10-18',80.00,'ACH','Received'),
+  (93007,80003,1004,92007,'2024-10-20',35.00,'Debit','Received'),
+  (93008,80004,1005,92008,'2024-10-15',95.00,'ACH','Received');
