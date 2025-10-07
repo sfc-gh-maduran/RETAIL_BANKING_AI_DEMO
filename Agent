@@ -1,0 +1,69 @@
+```json
+{
+  "agent_spec": {
+    "models": {
+      "orchestration": "auto"
+    },
+    "instructions": {
+      "response": "Ask 1 clarifying question when intent is ambiguous (e.g., time period, filters, LOB).\n  - Default time grain to month and time range to last 12 months if not specified.\n  - Include a brief executive summary (1–3 sentences) before the table/chart.\n  - Show both table and a suitable chart when trends or distributions are implied.\n  - Display SQL used (collapsed by default if UI supports) and reference entities/measures.\n  - Formatting:\n      - Currency: $ with thousands separators; no decimals for whole-dollar aggregates.\n      - Percentages: 2 decimals (e.g., 7.32%).\n      - Dates: YYYY‑MM or YYYY‑MM‑DD depending on grain.\n  - Definitions: If a metric is not obvious (e.g., approval rate, 30+ DPD), state formula.\n  - PII/Privacy: Do not display email/phone unless explicitly requested by an authorized user intent.\n  - Error handling: If a measure/dimension is unavailable, explain and suggest the closest supported query.\n  - Follow‑ups: Offer 2–3 next questions that deepen the analysis (e.g., by channel, product, segment).\n  - Reproducibility: Keep filters explicit in the narrative (time range, LOBs, segments, geography).\n",
+      "orchestration": "Step 1: Parse intent\n      - Identify LOB(s), time range, grain, measures, dimensions, and filters.\n      - If missing, ask a single clarifying question; otherwise apply defaults.\n  - Step 2: Map to semantic model\n      - Choose the relevant model(s) and entities.\n      - Resolve measures (e.g., approval_rate, delinquency_rate_30dpd, utilization) and required joins via defined relationships.\n  - Step 3: Construct the query plan\n      - Select time grain; add WHERE on time, LOB, and filters.\n      - Choose aggregations and limited dimensions; avoid high‑cardinality explosions.\n      - For cross‑LOB questions, compute sub‑metrics separately, then join or union at the customer level as defined by relationships.\n  - Step 4: Generate SQL via semantic model\n      - Use only model-exposed measures/dimensions; avoid raw columns unless requested.\n      - Include safe defaults (e.g., last 12 months) and clear aliases for readability.\n  - Step 5: Execute and validate\n      - Sanity-check result sizes; if empty or out-of-range, suggest adjusting filters/time.\n      - If a derived metric is undefined, provide the definition and compute from available measures.\n  - Step 6: Present results\n      - Start with a 1–3 sentence insight summary.\n      - Provide a compact table; add a time-series or bar chart when appropriate.\n      - Show SQL used and list key assumptions/filters.\n  - Step 7: Recommend next steps\n      - Offer 2–3 follow-up queries (e.g., deeper by channel/product/segment or drill into outliers).\n  - Guardrails & compliance\n      - Respect PII constraints; use customer-level details only with clear user intent.\n      - Never infer beyond the data; label any assumptions explicitly.\n      - Keep metric definitions transparent and consistent across sessions.",
+      "sample_questions": [
+        {
+          "question": "total loans and total principal by month for the last 12 months"
+        },
+        {
+          "question": "active cards, average credit limit, and average APR by product"
+        },
+        {
+          "question": "customers with both an active auto loan and an active credit card"
+        },
+        {
+          "question": "total exposure per customer (loan principal + card balance)"
+        },
+        {
+          "question": "customers with a missed auto payment and a returned card payment in last 90 days"
+        }
+      ]
+    },
+    "tools": [
+      {
+        "tool_spec": {
+          "type": "cortex_analyst_text_to_sql",
+          "name": "Auto_CA",
+          "description": "CUSTOMERS:\n- Database: BANKING, Schema: AUTO_LOANS_DEMO\n- This table stores comprehensive customer information including personal details, contact information, and demographic data. It serves as the central customer registry with unique identifiers and creditworthiness classifications.\n- The table supports customer segmentation through credit risk categories (Prime, Near-Prime, Subprime) and tracks customer lifecycle from account creation. Geographic distribution is captured through address fields for regional analysis.\n- LIST OF COLUMNS: CUSTOMER_ID (unique customer identifier - links to CUSTOMER_ID in other tables), FIRST_NAME, LAST_NAME, EMAIL, PHONE, ADDRESS_LINE1, CITY, STATE, POSTAL_CODE, SEGMENT (credit risk classification), CREATED_AT (account creation timestamp), DOB (date of birth)\n\nCUSTOMER_ACCOUNTS:\n- Database: BANKING, Schema: AUTO_LOANS_DEMO\n- This table manages customer account information and serves as a bridge between customers and their banking relationships. Each account has a unique identifier and is associated with a specific branch location.\n- The table tracks account status and opening dates, enabling analysis of account lifecycle and branch performance. It establishes the foundational relationship for all banking products and services.\n- LIST OF COLUMNS: ACCOUNT_ID (unique account identifier - links to ACCOUNT_ID in LOANS table), CUSTOMER_ID (links to CUSTOMER_ID in CUSTOMERS table), BRANCH_ID (branch location identifier), STATUS (account status), ACCOUNT_OPEN_DATE (account opening date)\n\nLOANS:\n- Database: BANKING, Schema: AUTO_LOANS_DEMO\n- This table contains active loan information including principal amounts, interest rates, and repayment terms. It represents the core lending products offered to customers for vehicle financing.\n- The table enables analysis of loan portfolio performance, interest rate trends, and maturity schedules. It connects loan applications to actual funded loans and tracks loan lifecycle from origination to maturity.\n- LIST OF COLUMNS: LOAN_ID (unique loan identifier - links to LOAN_ID in PAYMENTS and VEHICLES tables), CUSTOMER_ID (borrower identifier), ACCOUNT_ID (associated account), APPLICATION_ID (originating application - links to APPLICATION_ID in LOAN_APPLICATIONS), PRINCIPAL (loan amount), INTEREST_RATE, TERM_MONTHS (repayment period), LOAN_STATUS, ORIGINATION_DATE, MATURITY_DATE\n\nLOAN_APPLICATIONS:\n- Database: BANKING, Schema: AUTO_LOANS_DEMO\n- This table captures all loan application submissions including requested amounts, terms, and application channels. It tracks the complete application process from submission through decision-making.\n- The table enables analysis of application conversion rates, channel effectiveness, and decision patterns. It supports understanding of customer demand and lending criteria through approval/denial tracking.\n- LIST OF COLUMNS: APPLICATION_ID (unique application identifier - links to APPLICATION_ID in LOANS table), CUSTOMER_ID (applicant identifier), AMOUNT_REQUESTED, TERM_MONTHS (requested repayment period), INTEREST_RATE_OFFERED, PRODUCT (loan type: New Auto, Used Auto, Refinance), CHANNEL (application source: Dealer, Online, Branch), STATUS (Approved, Denied, Pending), REASON_CODE (decision rationale), SUBMITTED_AT, DECISION_AT\n\nPAYMENTS:\n- Database: BANKING, Schema: AUTO_LOANS_DEMO\n- This table records all payment transactions for loans including scheduled payments, amounts due, and payment performance. It tracks both successful payments and delinquencies with detailed breakdowns of principal and interest components.\n- The table enables analysis of payment behavior, delinquency patterns, and cash flow management. It supports risk assessment through payment timing and late fee tracking.\n- LIST OF COLUMNS: PAYMENT_ID (unique payment identifier), CUSTOMER_ID (payer identifier), LOAN_ID (associated loan), AMOUNT_DUE, AMOUNT_PAID, PRINCIPAL_COMPONENT (principal portion of payment), INTEREST_COMPONENT (interest portion of payment), LATE_FEE, PAYMENT_STATUS (OnTime, Late, Missed), PAST_DUE_DAYS, PAYMENT_DATE\n\nVEHICLES:\n- Database: BANKING, Schema: AUTO_LOANS_DEMO\n- This table contains detailed vehicle information including make, model, pricing, and identification numbers for vehicles financed through loans. It captures both new and used vehicle characteristics at the time of purchase.\n- The table enables analysis of vehicle portfolio composition, pricing trends, and dealer relationships. It supports collateral management and vehicle depreciation tracking through purchase price and mileage data.\n- LIST OF COLUMNS: VEHICLE_ID (unique vehicle identifier), LOAN_ID (financing loan identifier), VIN (vehicle identification number), MAKE (manufacturer), MODEL, MODEL_YEAR, MILEAGE_AT_PURCHASE, MSRP (manufacturer suggested retail price), PURCHASE_PRICE, DEALER_ID (selling dealer identifier)\n\nREASONING:\nThis semantic view represents a comprehensive auto lending ecosystem that tracks the complete customer journey from loan application through vehicle purchase and ongoing payment management. The tables are interconnected through customer, account, loan, and application identifiers, creating a unified view of the lending process. The relationships enable analysis across multiple dimensions including customer demographics, application channels, loan performance, payment behavior, and vehicle characteristics. This integrated structure supports both operational lending decisions and strategic portfolio analysis.\n\nDESCRIPTION:\nThe AUTO_LOANS_SEMANTIC_VIEW provides a comprehensive data model for auto lending operations within the BANKING.AUTO_LOANS_DEMO schema, encompassing the complete customer lifecycle from initial loan application through vehicle financing and payment management. The model connects customer demographics and creditworthiness segments with their loan applications submitted through various channels (dealer, online, branch), tracking approval decisions and terms offered. Approved applications flow into active loans with detailed terms, which are secured by specific vehicles with comprehensive specifications and pricing information. The payment tracking system monitors ongoing loan performance including principal and interest breakdowns, payment timing, and delinquency management, enabling comprehensive portfolio analysis and risk assessment across the entire auto lending operation."
+        }
+      },
+      {
+        "tool_spec": {
+          "type": "cortex_analyst_text_to_sql",
+          "name": "Credit_CA",
+          "description": "Credit card cortex analyst"
+        }
+      }
+    ],
+    "tool_resources": {
+      "Auto_CA": {
+        "execution_environment": {
+          "query_timeout": 30,
+          "type": "warehouse",
+          "warehouse": "BI_LARGE_WH"
+        },
+        "semantic_view": "BANKING.AUTO_LOANS_DEMO.AUTO_LOANS_SEMANTIC_VIEW"
+      },
+      "Credit_CA": {
+        "execution_environment": {
+          "query_timeout": 30,
+          "type": "warehouse",
+          "warehouse": "ANALYTICS_RIA_WH"
+        },
+        "semantic_view": "BANKING.CREDIT.CREDIT_SEMANTIC_VIEW"
+      }
+    }
+  },
+  "name": "CONSUMER_BANK_AGENT",
+  "database_name": "SNOWFLAKE_INTELLIGENCE",
+  "schema_name": "AGENTS",
+  "owner": "SNOWFLAKE_INTELLIGENCE_ADMIN_RL",
+  "created_on": "2025-08-28T23:39:40.443+00:00"
+}
+```
